@@ -1,0 +1,56 @@
+
+__root: @statement
+
+statement: @statement-if;
+statement: @statement-for;
+statement: @statement-return semicolon;
+statement: @statement-declare-var semicolon;
+statement: @function-call semicolon;
+statement: @assignment semicolon;
+
+repeat-statement: @statement;
+repeat-statement: @repeat-statement @statement;
+
+end-statement: colon @statement;
+end-statement: @statement-bracket;
+
+statement-bracket: brace_l brace_r;
+statement-bracket: brace_l @repeat-statement brace_r;
+
+statement-if: keyword_if @expression @end-statement;
+statement-if: keyword_if @expression @statement-if-else;
+
+statement-if-else: keyword_else @end-statement;
+statement-if-else: keyword_else @statement-if;
+
+statement-for: keyword_for @end-statement;
+
+statement-return: keyword_ret;
+statement-return: keyword_ret @expression;
+
+statement-declare-var: keyword_let id;
+statement-declare-var: keyword_let id op_assign @expression;
+
+expression: @function-call;
+expression: @assignment;
+
+function-call: id paren_l paren_r;
+function-call: id paren_l @function-call-argument paren_r;
+
+function-call-argument: @expression;
+function-call-argument: @function-call-argument comma @expression;
+
+assignment: @left-value op_assign @expression;
+assignment: @left-value op_assign_add @expression;
+assignment: @left-value op_assign_sub @expression;
+assignment: @left-value op_assign_mul @expression;
+assignment: @left-value op_assign_div @expression;
+assignment: @left-value op_assign_pow @expression;
+assignment: @left-value op_assign_bit_or @expression;
+assignment: @left-value op_assign_bit_and @expression;
+assignment: @left-value op_assign_bit_xor @expression;
+assignment: @left-value op_assign_bit_not @expression;
+assignment: @left-value op_assign_shift_l @expression;
+assignment: @left-value op_assign_shift_r @expression;
+
+left-value: id;
