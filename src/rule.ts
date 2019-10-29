@@ -142,10 +142,12 @@ class Rule {
 class AugmentedRule {
 	private _rule: Rule;
 	private _index: number;
+	private _lookahead: string;
 
-	public constructor(rule: Rule) {
+	public constructor(rule: Rule, lookahead: string) {
 		this._rule = rule;
 		this._index = 0;
+		this._lookahead = lookahead;
 	}
 
 	public get rule(): Rule {
@@ -162,6 +164,10 @@ class AugmentedRule {
 
 	public set index(index: number) {
 		this._index = index;
+	}
+
+	public get lookahead(): string {
+		return this._lookahead;
 	}
 
 	public get remains(): boolean {
@@ -284,7 +290,7 @@ class TableGenerator {
 			};
 
 			for (const ruleName in this.ruleListMap)
-				if (this.ruleListMap.hasOwnProperty(ruleName)) {
+				if (this.ruleListMap.hasOwnProperty(ruleName))
 					this.ruleListMap[ruleName].forEach(rule => {
 						const firstRuleItem = rule.first;
 
@@ -293,7 +299,6 @@ class TableGenerator {
 
 						updateSet(ruleName, firstRuleItem);
 					});
-				}
 
 			if (!isUpdated)
 				break;
@@ -352,7 +357,7 @@ class TableGenerator {
 		return followSet;
 	}
 
-	public generateLR0(): AugmentedRuleSetMapSet {
+	public generateC1(firstSet: FirstSet): AugmentedRuleSetMapSet {
 		if (!this.ruleListMap.hasOwnProperty('__root'))
 			throw {
 				error: 'Unable to find a root nonterminal',
@@ -393,7 +398,24 @@ class TableGenerator {
 						if (rule.ruleItem.type !== RuleItemType.id)
 							return;
 
-						this.ruleListMap[rule.ruleItem.content].forEach(rule => addedRule.push(new AugmentedRule(rule)));
+						let lookaheadSet = new Set<string>(['']);
+
+						if (rule.index + 1 < rule.rule.itemList.length) {
+							const lookaheadRuleItem = rule.rule.itemList[rule.index + 1];
+
+							if (lookaheadRuleItem.type !== RuleItemType.id)
+								lookaheadSet = new Set<string>([lookaheadRuleItem.content]);
+							else {
+								lookaheadSet = firstSet[lookaheadRuleItem.content];
+
+								if (!lookaheadSet.size)
+									lookaheadSet = new Set<string>(['']);
+							}
+						}
+
+						this.ruleListMap[rule.ruleItem.content].forEach(rule =>
+							lookaheadSet.forEach(lookahead =>
+								addedRule.push(new AugmentedRule(rule, lookahead))));
 					});
 				}
 
@@ -437,7 +459,7 @@ class TableGenerator {
 					if (!result.hasOwnProperty(ruleName))
 						result[ruleName] = new AugmentedRuleSet();
 
-					const newRule = new AugmentedRule(rule.rule);
+					const newRule = new AugmentedRule(rule.rule, rule.lookahead);
 					newRule.index = rule.index + 1;
 
 					result[ruleName].add(newRule);
@@ -477,7 +499,7 @@ class TableGenerator {
 			}
 		};
 
-		addSet(closure(new AugmentedRule(this.ruleListMap['__root'][0])));
+		addSet(closure(new AugmentedRule(this.ruleListMap['__root'][0], '')));
 
 		while (!gotoQueue.empty) {
 			const gotoItem = gotoQueue.pop();

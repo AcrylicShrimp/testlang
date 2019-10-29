@@ -15,12 +15,12 @@ import { stringify } from 'querystring';
 const parser = new Parser(readFileSync(resolve(__dirname, '..', 'rules', 'test.rule'), 'utf-8'));
 const tableGenerator = new TableGenerator(parser);
 
-// const firstSet = tableGenerator.generateFirst();
-// const followSet = tableGenerator.generateFollow(firstSet);
+const firstSet = tableGenerator.generateFirst();
+const followSet = tableGenerator.generateFollow(firstSet);
 
-// console.log(firstSet);
-// console.log(followSet);
+console.log(firstSet);
+console.log(followSet);
 
-const result = tableGenerator.generateLR0();
+const result = tableGenerator.generateC1(firstSet);
 
 console.log(result);
