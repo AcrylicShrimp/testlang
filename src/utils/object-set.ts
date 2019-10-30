@@ -22,6 +22,13 @@ class ObjectSet<T> {
 		}
 	}
 
+	public obtain(hash: string): T | null {
+		if (!this._set.hasOwnProperty(hash))
+			return null;
+
+		return this._set[hash];
+	}
+
 	public get size(): number {
 		return Object.keys(this._set).length;
 	}

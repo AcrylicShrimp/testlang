@@ -1,5 +1,8 @@
+import objectHash from 'object-hash';
+
 import ObjectSet from './utils/object-set';
 import Queue from './utils/queue';
+import { Hash, timingSafeEqual } from 'crypto';
 
 enum TokenType {
 	eof,
@@ -181,7 +184,71 @@ interface AugmentedRuleSetMap {
 	[ruleName: string]: AugmentedRuleSet
 }
 
-class AugmentedRuleSetMapSet extends ObjectSet<AugmentedRuleSetMap>{ }
+type AugmentedRuleSetMapSetTranstition = { from: AugmentedRuleSetMap, to: AugmentedRuleSetMap, label: string };
+
+class AugmentedRuleSetMapSet extends ObjectSet<AugmentedRuleSetMap> {
+	private _transitionSet: ObjectSet<AugmentedRuleSetMapSetTranstition> = new ObjectSet();
+	private _transitionKeyMap: { [hash: string]: string } = {};
+	private _indexMap: { [hash: string]: number } = {};
+
+	public add(obj: AugmentedRuleSetMap) {
+		super.add(obj);
+
+		const hash = objectHash(obj, {
+			respectType: false,
+			unorderedArrays: true
+		});
+
+		if (this._indexMap.hasOwnProperty(hash))
+			return;
+
+		const index = Object.keys(this._indexMap).length;
+		this._indexMap[hash] = index;
+	}
+
+	public addTransition(transition: AugmentedRuleSetMapSetTranstition) {
+		const hash = objectHash(transition, {
+			respectType: false,
+			unorderedArrays: true
+		});
+		const fromHash = objectHash({
+			from: transition.from,
+			label: transition.label
+		}, {
+			respectType: false,
+			unorderedArrays: true
+		});
+
+		this._transitionSet.add(transition);
+		this._transitionKeyMap[fromHash] = hash;
+	}
+
+	public obtainTransition(from: AugmentedRuleSetMap, label: string): AugmentedRuleSetMapSetTranstition | null {
+		const hash = objectHash({
+			from,
+			label
+		}, {
+			respectType: false,
+			unorderedArrays: true
+		});
+
+		if (!this._transitionKeyMap.hasOwnProperty(hash))
+			return null;
+
+		return this._transitionSet.obtain(this._transitionKeyMap[hash]);
+	}
+
+	public forEachTransition(type: (trantision: AugmentedRuleSetMapSetTranstition) => void) {
+		this._transitionSet.forEach(type);
+	}
+
+	public obtainIndex(ruleSetMap: AugmentedRuleSetMap): number {
+		return this._indexMap[objectHash(ruleSetMap, {
+			respectType: false,
+			unorderedArrays: true
+		})];
+	}
+}
 
 class Parser {
 	private lexer: Lexer;
@@ -251,6 +318,27 @@ interface FirstSet {
 interface FollowSet {
 	[key: string]: Set<string>
 }
+
+enum ActionType {
+	goto,
+	shift,
+	reduce,
+	accept
+}
+
+interface ActionItem {
+	type: ActionType,
+	nextState: number,
+	reduceCount: number,
+	reduceRuleName: string
+}
+
+interface ActionStateItem {
+	id: { [content: string]: ActionItem },
+	literal: { [content: string]: ActionItem }
+}
+
+class ActionTable extends Array<ActionStateItem>{ }
 
 class TableGenerator {
 	private ruleListMap: RuleListMap;
@@ -413,6 +501,9 @@ class TableGenerator {
 							}
 						}
 
+						if (lookaheadSet.size === 1 && lookaheadSet.has(''))
+							lookaheadSet = new Set([rule.lookahead]);
+
 						this.ruleListMap[rule.ruleItem.content].forEach(rule =>
 							lookaheadSet.forEach(lookahead =>
 								addedRule.push(new AugmentedRule(rule, lookahead))));
@@ -472,15 +563,23 @@ class TableGenerator {
 			return closureAll(result);
 		};
 
-		const lr0Set: AugmentedRuleSetMapSet = new AugmentedRuleSetMapSet();
-		const gotoQueue = new Queue<{ ruleSetMap: AugmentedRuleSetMap, ruleName: string }>();
+		type GotoItem = { ruleSetMap: AugmentedRuleSetMap, labelRuleItemContent: string };
+		const gotoQueue = new Queue<GotoItem>();
+		const c1Set: AugmentedRuleSetMapSet = new AugmentedRuleSetMapSet();
 
-		const addSet = (ruleSetMap: AugmentedRuleSetMap) => {
-			const size = lr0Set.size;
+		const addSet = (ruleSetMap: AugmentedRuleSetMap, srcGotoItem: GotoItem | null) => {
+			if (srcGotoItem)
+				c1Set.addTransition({
+					from: srcGotoItem.ruleSetMap,
+					to: ruleSetMap,
+					label: srcGotoItem.labelRuleItemContent
+				});
 
-			lr0Set.add(ruleSetMap);
+			const size = c1Set.size;
 
-			if (size === lr0Set.size)
+			c1Set.add(ruleSetMap);
+
+			if (size === c1Set.size)
 				return;
 
 			for (const ruleName in ruleSetMap) {
@@ -492,14 +591,14 @@ class TableGenerator {
 						return;
 
 					gotoQueue.add({
-						ruleName: rule.ruleItem.content,
+						labelRuleItemContent: rule.ruleItem.content,
 						ruleSetMap
 					});
 				});
 			}
 		};
 
-		addSet(closure(new AugmentedRule(this.ruleListMap['__root'][0], '')));
+		addSet(closure(new AugmentedRule(this.ruleListMap['__root'][0], '')), null);
 
 		while (!gotoQueue.empty) {
 			const gotoItem = gotoQueue.pop();
@@ -507,13 +606,77 @@ class TableGenerator {
 			if (!gotoItem)
 				continue;
 
-			const gotoResult = gotoAll(gotoItem.ruleSetMap, gotoItem.ruleName);
+			const gotoResult = gotoAll(gotoItem.ruleSetMap, gotoItem.labelRuleItemContent);
 
 			if (gotoResult)
-				addSet(gotoResult);
+				addSet(gotoResult, gotoItem);
 		}
 
-		return lr0Set;
+		return c1Set;
+	}
+
+	public genenrateActionTable(ruleSetMapSet: AugmentedRuleSetMapSet): ActionTable {
+		const stateList: Array<AugmentedRuleSetMap> = [];
+
+		ruleSetMapSet.forEach(ruleSetMap => stateList[ruleSetMapSet.obtainIndex(ruleSetMap)] = ruleSetMap);
+
+		const actionTable = new ActionTable();
+
+		stateList.forEach(() => {
+			actionTable.push({
+				id: {},
+				literal: {}
+			});
+		});
+
+		ruleSetMapSet.forEach(ruleSetMap => {
+			const index = ruleSetMapSet.obtainIndex(ruleSetMap);
+
+			for (const ruleName in ruleSetMap) {
+				if (!ruleSetMap.hasOwnProperty(ruleName))
+					continue;
+
+				ruleSetMap[ruleName].forEach(rule => {
+					if (rule.remains && rule.ruleItem.type === RuleItemType.literal) { // Shift
+						const transition = ruleSetMapSet.obtainTransition(ruleSetMap, rule.ruleItem.content);
+
+						if (transition)
+							actionTable[index].literal[rule.ruleItem.content] = {
+								type: ActionType.shift,
+								nextState: ruleSetMapSet.obtainIndex(transition.to),
+								reduceCount: -1,
+								reduceRuleName: ''
+							};
+					} else if (rule.remains && rule.ruleItem.type === RuleItemType.id) { // Goto
+						const transition = ruleSetMapSet.obtainTransition(ruleSetMap, rule.ruleItem.content);
+
+						if (transition)
+							actionTable[index].id[rule.ruleItem.content] = {
+								type: ActionType.goto,
+								nextState: ruleSetMapSet.obtainIndex(transition.to),
+								reduceCount: -1,
+								reduceRuleName: ''
+							};
+					} else if (!rule.remains && rule.lookahead === '' && ruleName === '__root') { // Accept
+						actionTable[index].literal[''] = {
+							type: ActionType.accept,
+							nextState: -1,
+							reduceCount: rule.rule.itemList.length,
+							reduceRuleName: ruleName
+						};
+					} else if (!rule.remains) { // Reduce
+						actionTable[index].literal[rule.lookahead] = {
+							type: ActionType.reduce,
+							nextState: -1,
+							reduceCount: rule.rule.itemList.length,
+							reduceRuleName: ruleName
+						};
+					}
+				});
+			}
+		});
+
+		return actionTable;
 	}
 
 	private ensureRuleExists(rule: Rule) {

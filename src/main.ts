@@ -18,9 +18,10 @@ const tableGenerator = new TableGenerator(parser);
 const firstSet = tableGenerator.generateFirst();
 const followSet = tableGenerator.generateFollow(firstSet);
 
-console.log(firstSet);
-console.log(followSet);
+// console.log(firstSet);
+// console.log(followSet);
 
-const result = tableGenerator.generateC1(firstSet);
+const c1 = tableGenerator.generateC1(firstSet);
+const result = tableGenerator.genenrateActionTable(c1);
 
 console.log(result);
