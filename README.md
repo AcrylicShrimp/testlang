@@ -30,3 +30,12 @@ statement: @var-declare-statement semicolon;
 ```
 
 Every terminals should be defined in `lexer.ts` too.
+
+### Root non-terminal
+Any valid rule files must define a root non-terminal `__root`(double underscore). This root non-terminal cannot be defined multiple times. After successful parsing, the parser may return an AST named `S` for below rules.
+
+```
+__root = @S;
+
+S: ...
+```
