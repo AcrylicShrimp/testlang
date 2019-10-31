@@ -6,7 +6,7 @@ This project was began for the complete implementation of the front-end of compi
 
 ## Structure
 - `src/rule.ts`: Parses a `rule` file and generates a [CLR parsing table](https://www.javatpoint.com/clr-1-parsing).
-- `src/parser.ts`: Parses a tokens given by a lexer and generates an AST. This parser is [driven by a parsing table](https://www.tutorialspoint.com/compiler_design/compiler_design_bottom_up_parser.htm).
+- `src/parser.ts`: Parses tokens from a lexer and generates an AST. This parser is [driven by a parsing table](https://www.tutorialspoint.com/compiler_design/compiler_design_bottom_up_parser.htm).
 - `src/lexer.ts`: Supplies tokens to a parser by reading given input.
 
 ## Rule file
