@@ -1,13 +1,13 @@
 
-class Queue<T> {
+class Stack<T> {
 	private _list: Array<T> = [];
 
-	public add(value: T) {
+	public push(value: T) {
 		this._list.push(value);
 	}
 
 	public pop(): T | undefined {
-		return this._list.shift();
+		return this._list.pop();
 	}
 
 	public get size(): number {
@@ -19,4 +19,4 @@ class Queue<T> {
 	}
 }
 
-export default Queue;
+export default Stack;

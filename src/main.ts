@@ -2,26 +2,22 @@
 
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-// import { Lexer, Token, TokenType } from './lexer';
-import { Parser, TableGenerator } from './rule';
-import { stringify } from 'querystring';
+import { Parser as RuleParser, TableGenerator } from './rule';
+import { Parser } from './parser';
 
-// const lexer = new Lexer("if 1 == +1.: return '10fsdfsfs';");
+try {
+	const ruleParser = new RuleParser(readFileSync(resolve(__dirname, '..', 'rules', 'main.rule'), 'utf-8'));
+	const tableGenerator = new TableGenerator(ruleParser);
 
-// for (let token = lexer.next(); token.type != TokenType.eof; token = lexer.next()) {
-// 	console.log(token);
-// }
+	const firstSet = tableGenerator.generateFirst();
+	const c1 = tableGenerator.generateC1(firstSet);
+	const actionTable = tableGenerator.genenrateActionTable(c1);
 
-const parser = new Parser(readFileSync(resolve(__dirname, '..', 'rules', 'test.rule'), 'utf-8'));
-const tableGenerator = new TableGenerator(parser);
+	const parser = new Parser(actionTable);
 
-const firstSet = tableGenerator.generateFirst();
-const followSet = tableGenerator.generateFollow(firstSet);
+	const ast = parser.parse('let test = id;');
 
-// console.log(firstSet);
-// console.log(followSet);
-
-const c1 = tableGenerator.generateC1(firstSet);
-const result = tableGenerator.genenrateActionTable(c1);
-
-console.log(result);
+	console.log(ast);
+} catch (err) {
+	console.error(err);
+}

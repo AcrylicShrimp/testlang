@@ -1,85 +1,153 @@
 import { Lexer, Token, TokenType } from './lexer';
+import { ActionTable, ActionType } from './rule';
+import Stack from './utils/stack';
 
-enum ParsingTreeNodeType {
-	id,
-	literal,
-	paren,
-	addsub,
-	muldivmod,
-	pow,
-	incdec,
-	eqneq,
-	lsgt,
-	orand,
-	not,
-	bit_orandxor,
-	bit_not,
-	shift,
-	assign
-}
+class AST {
+	private _name: string;
+	private _isTerminal: boolean;
+	private _child: Token | null;
+	private _children: Array<AST>;
 
-class ParsingTreeNode {
-	private _type: ParsingTreeNodeType;
-	protected child: Array<ParsingTreeNode>;
-
-	public constructor(type: ParsingTreeNodeType) {
-		this._type = type;
-		this.child = [];
+	public constructor(name: string, isTerminal: boolean) {
+		this._name = name;
+		this._isTerminal = isTerminal;
+		this._child = null;
+		this._children = [];
 	}
 
-	protected push(child: ParsingTreeNode) {
-		this.child.push(child);
+	public setChild(token: Token) {
+		this._child = token;
 	}
 
-	public get type(): ParsingTreeNodeType {
-		return this._type;
+	public addChildrenReverse(ast: AST) {
+		this._children.unshift(ast);
 	}
 
-	public get isLeaf(): boolean {
-		return !this.child.length;
-	}
-}
-
-class TokenProvider {
-	private lexer: Lexer;
-	private currentToken: Token;
-	private nextToken: Token;
-
-	public constructor(lexer: Lexer) {
-		this.lexer = lexer;
-		this.currentToken = this.lexer.next();
-		this.nextToken = this.currentToken.type === TokenType.eof ? this.currentToken : this.lexer.next();
+	public get name(): string {
+		return this._name;
 	}
 
-	public consume() {
-		this.currentToken = this.nextToken;
-		this.nextToken = this.currentToken.type === TokenType.eof ? this.currentToken : this.lexer.next();
+	public get isTerminal(): boolean {
+		return this._isTerminal;
 	}
 
-	public get current(): Token {
-		return this.currentToken;
+	public get child(): Token | null {
+		return this._child;
 	}
 
-	public get next(): Token {
-		return this.nextToken;
+	public get children(): Array<AST> {
+		return this._children;
 	}
 }
 
 class Parser {
-	private provider: TokenProvider;
+	private actionTable: ActionTable;
 
-	public constructor(content: string) {
-		this.provider = new TokenProvider(new Lexer(content));
+	public constructor(actionTable: ActionTable) {
+		this.actionTable = actionTable;
 	}
 
-	public parse() {
-		const token = this.provider.current;
+	public parse(content: string): AST | null {
+		let state = 0;
+		let stack = new Stack<AST | number>();
 
-		if (token.type === TokenType.keyword_if)
-			this.parseIf(token);
-	}
+		stack.push(state);
 
-	private parseIf(token: Token): ParsingTreeNode | null {
-		return null;
+		const popAST = (): AST => {
+			const ast = stack.pop();
+
+			if (ast === undefined || typeof ast === 'number')
+				throw {
+					error: 'Unexpected Stack Item Error',
+					message: `Wrong stack state. AST expected, got ${typeof ast}.`
+				};
+
+			return ast;
+		};
+		const popNumber = (): number => {
+			const value = stack.pop();
+
+			if (value === undefined || typeof value !== 'number')
+				throw {
+					error: 'Unexpected Stack Item Error',
+					message: `Wrong stack state. Number expected, got ${typeof value}.`
+				};
+
+			return value;
+		};
+		const peekNumber = (): number => {
+			const value = stack.pop();
+
+			if (value === undefined || typeof value !== 'number')
+				throw {
+					error: 'Unexpected Stack Item Error',
+					message: `Wrong stack state. Number expected, got ${typeof value}.`
+				};
+
+			stack.push(value);
+
+			return value;
+		};
+
+		const lexer = new Lexer(content);
+		let token = lexer.next();
+		let tokenType = token.type === TokenType.eof ? '' : TokenType[token.type];
+
+		for (; ;) {
+			state = peekNumber();
+
+			const actionItem = this.actionTable[state].literal[tokenType];
+
+			if (!actionItem)
+				throw {
+					error: 'Invalid Syntax',
+					message: `Unexpected token detected: ${token}`
+				};
+
+			switch (actionItem.type) {
+				case ActionType.shift: {
+					const ast = new AST(TokenType[token.type], true);
+					ast.setChild(token);
+
+					stack.push(ast);
+					stack.push(actionItem.nextState);
+
+					token = lexer.next();
+					tokenType = token.type === TokenType.eof ? '' : TokenType[token.type];
+
+					break;
+				}
+				case ActionType.reduce: {
+					const ast = new AST(actionItem.reduceRuleName, false);
+
+					for (let count = 0; count < actionItem.reduceCount; ++count) {
+						popNumber();
+						ast.addChildrenReverse(popAST());
+					}
+
+					state = peekNumber();
+
+					stack.push(ast);
+					stack.push(this.actionTable[state].id[ast.name].nextState);
+
+					break;
+				}
+				case ActionType.accept: {
+					popNumber();
+					return popAST();
+				}
+				default: {
+					throw {
+						error: 'Unexpected Action Item',
+						message: `Current action item is invalid: ${actionItem}`
+					};
+				}
+			}
+		}
 	}
 }
+
+export {
+	AST,
+	Parser
+};

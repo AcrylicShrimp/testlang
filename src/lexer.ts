@@ -367,6 +367,7 @@ class Lexer {
 			case 'true': return returnToken(TokenType.literal_bool, 'true');
 			case 'false': return returnToken(TokenType.literal_bool, 'false');
 
+			case 'let': return returnToken(TokenType.keyword_let, 'let');
 			case 'ret': return returnToken(TokenType.keyword_ret, 'ret');
 			case 'if': return returnToken(TokenType.keyword_if, 'if');
 			case 'else': return returnToken(TokenType.keyword_else, 'else');

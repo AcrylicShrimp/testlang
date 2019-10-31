@@ -1,5 +1,5 @@
 
-__root: @statement
+__root: @statement;
 
 statement: @statement-if;
 statement: @statement-for;
@@ -33,6 +33,7 @@ statement-declare-var: keyword_let id op_assign @expression;
 
 expression: @function-call;
 expression: @assignment;
+expression: @left-value;
 
 function-call: id paren_l paren_r;
 function-call: id paren_l @function-call-argument paren_r;

@@ -687,5 +687,7 @@ class TableGenerator {
 
 export {
 	Parser,
-	TableGenerator
+	TableGenerator,
+	ActionTable,
+	ActionType
 }
