@@ -1,6 +1,8 @@
 # testlang
 A typescript &amp; Node.js implemented compiler front-end project.
 
+> This project has been ported to Rust due to performance issues. If you have planned to run it, [please consider use new repository instead](https://github.com/AcrylicShrimp/testlang-rust).
+
 ## Purpose
 This project was began for the complete implementation of the front-end of compilers.
 
